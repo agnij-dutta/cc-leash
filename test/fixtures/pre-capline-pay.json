@@ -5,6 +5,6 @@
   "permission_mode": "default",
   "hook_event_name": "PreToolUse",
   "tool_name": "mcp__capline__pay",
-  "tool_input": { "mandateId": "0x72a143ccb480da1190e7d549e2b8f8da2317039f7a13713e7be84b936ec17140", "chain": "solana", "to": "DataVendor", "amount": 1000 },
+  "tool_input": { "mandateId": "0x0000000000000000000000000000000000000000000000000000000000000001", "chain": "solana", "to": "DataVendor", "amount": 1000 },
   "tool_use_id": "toolu_01F6xCapline"
 }
