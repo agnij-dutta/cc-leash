@@ -35,7 +35,10 @@ test("in-policy payment passes through to normal permissions and reserves a hold
   const r = s.run("pre", s.fixture("pre-fakepay-pay-15"));
   assert.equal(r.json, null, "no decision = normal permission flow");
   const led = s.ledger();
-  assert.deepEqual(led.map((e) => e.event), ["reserve", "decision"]);
+  assert.deepEqual(
+    led.map((e) => e.event),
+    ["reserve", "decision"],
+  );
   assert.equal(led[1].decision, "allow");
 });
 
@@ -177,7 +180,10 @@ test("stale holds expire after reservationTtlMinutes", () => {
   const s = sandbox({ global: { limits: { USD: { perCall: 50, daily: 20 } }, reservationTtlMinutes: 5 } });
   fs.mkdirSync(path.dirname(s.ledgerFile), { recursive: true });
   const old = new Date(Date.now() - 6 * 60_000).toISOString();
-  fs.writeFileSync(s.ledgerFile, JSON.stringify({ v: 1, ts: old, event: "reserve", hold: "toolu_stale", nonce: "n1", amount: 15, currency: "USD", session: "x" }) + "\n");
+  fs.writeFileSync(
+    s.ledgerFile,
+    JSON.stringify({ v: 1, ts: old, event: "reserve", hold: "toolu_stale", nonce: "n1", amount: 15, currency: "USD", session: "x" }) + "\n",
+  );
   assert.equal(s.run("pre", s.fixture("pre-fakepay-pay-15")).json, null);
 });
 
@@ -239,10 +245,15 @@ test("projectCanLoosen lets the project raise caps", () => {
 
 test("custom rule extracts from a nonstandard tool", () => {
   const s = sandbox({
-    global: { rules: [{ id: "acmebank", match: "^mcp__acmebank__wire$", amount: ["wire.cents"], scale: 100, currency: ["=USD"], payee: ["wire.beneficiary.name"] }] },
+    global: {
+      rules: [{ id: "acmebank", match: "^mcp__acmebank__wire$", amount: ["wire.cents"], scale: 100, currency: ["=USD"], payee: ["wire.beneficiary.name"] }],
+    },
   });
   const r = s.run("pre", {
-    session_id: "s", cwd: s.proj, hook_event_name: "PreToolUse", tool_use_id: uid(),
+    session_id: "s",
+    cwd: s.proj,
+    hook_event_name: "PreToolUse",
+    tool_use_id: uid(),
     tool_name: "mcp__acmebank__wire",
     tool_input: { wire: { cents: 990000, beneficiary: { name: "Mallory LLC" } } },
   });
@@ -257,7 +268,13 @@ test("tamper guard: Bash editing the leash policy asks; normal Bash is untouched
   assert.match(r.reason, /changes your spending policy/);
   const ok = s.run("pre", s.fixture("pre-bash-edit-policy", { tool_input: { command: "npm test" } }));
   assert.equal(ok.json, null);
-  const w = s.run("pre", { session_id: "s", cwd: s.proj, hook_event_name: "PreToolUse", tool_name: "Write", tool_input: { file_path: path.join(s.proj, ".leash.json"), content: "{}" } });
+  const w = s.run("pre", {
+    session_id: "s",
+    cwd: s.proj,
+    hook_event_name: "PreToolUse",
+    tool_name: "Write",
+    tool_input: { file_path: path.join(s.proj, ".leash.json"), content: "{}" },
+  });
   assert.equal(w.decision, "ask");
 });
 
@@ -267,7 +284,7 @@ test("fail closed: garbage stdin and corrupt policy both escalate", () => {
   const s2 = sandbox({ global: "{ this is not json" });
   const r = s2.run("pre", s2.fixture("pre-fakepay-pay-15"));
   assert.equal(r.decision, "ask");
-  assert.match(r.reason, /could not be parsed/);
+  assert.match(r.reason, /could not be applied/);
 });
 
 test("disabled policy (global) lets payments through untouched", () => {
@@ -298,7 +315,10 @@ test("PostToolUse adds spend context for Claude", () => {
   const s = sandbox();
   s.run("pre", s.fixture("pre-fakepay-pay-15"));
   const r = s.run("post", s.fixture("post-fakepay-pay-15"));
-  assert.match(r.json.hookSpecificOutput.additionalContext, /leash recorded \$15\.00 to acme-supplies \(today \$15\.00 of \$200\.00, session \$15\.00 of \$100\.00\)/);
+  assert.match(
+    r.json.hookSpecificOutput.additionalContext,
+    /leash recorded \$15\.00 to acme-supplies \(today \$15\.00 of \$200\.00, session \$15\.00 of \$100\.00\)/,
+  );
   const settled = s.ledger().filter((e) => e.event === "settle");
   assert.equal(settled.length, 1);
 });
@@ -310,6 +330,102 @@ test("CLI set/add/remove edit the global policy file", () => {
   assert.equal(s.cli("add", "payees.deny", "evil").status, 0);
   assert.equal(s.cli("remove", "payees.deny", "evil").status, 0);
   assert.equal(s.cli("set", "dryRun", "true").status, 0);
-  const g = JSON.parse(fs.readFileSync(s.env.LEASH_GLOBAL_CONFIG, "utf8"));
+  const g = JSON.parse(fs.readFileSync(s.globalConfig, "utf8"));
   assert.deepEqual(g, { limits: { USD: { daily: 500 } }, payees: { deny: ["*@scam.example"] }, dryRun: true });
+});
+
+// ---- regressions from the open-source review (each was a fail-open path)
+
+test("payee allowlist still applies when the amount is unknown and unknownAmount is allow", () => {
+  const s = sandbox({ global: { payees: { allow: ["acme-*"] }, unknownAmount: "allow" } });
+  const off = s.run("pre", s.fixture("pre-fakepay-pay-noamount", { tool_input: { to: "mallory" } }));
+  assert.equal(off.decision, "deny");
+  assert.match(off.reason, /not on the allowlist/);
+  const on = s.run("pre", s.fixture("pre-fakepay-pay-noamount", { tool_use_id: uid() }));
+  assert.equal(on.json, null, "on-list payee with unknown amount follows unknownAmount: allow");
+  assert.match(s.ledger().at(-1).reason, /allowed by policy: leash could not determine the amount/);
+});
+
+test("a deny wins over an ask: over-cap payment with unknown payee under an allowlist is denied", () => {
+  const s = sandbox({ global: { payees: { allow: ["acme-*"] } } });
+  const r = s.run("pre", s.fixture("pre-fakepay-pay-500", { tool_input: { to: null } }));
+  assert.equal(r.decision, "deny");
+  assert.match(r.reason, /per-call cap/);
+});
+
+test("invalid policy values fail closed instead of being dropped", () => {
+  for (const bad of [
+    { unknownAmount: "Deny" },
+    { limits: { USD: { perCall: "50" } } },
+    { limits: { USD: { perday: 10 } } },
+    { payees: { denied: ["x"] } },
+    { rules: [{ match: "(" }] },
+  ]) {
+    const s = sandbox({ global: bad });
+    const r = s.run("pre", s.fixture("pre-fakepay-pay-15"));
+    assert.equal(r.decision, "ask", JSON.stringify(bad));
+    assert.match(r.reason, /could not be applied/);
+  }
+});
+
+test("unknown top-level keys are a warning, not an error", () => {
+  const s = sandbox({ global: { limitz: {} } });
+  assert.equal(s.run("pre", s.fixture("pre-fakepay-pay-15")).json, null);
+  assert.ok(JSON.parse(s.cli("policy", "--json").stdout).notes.some((n) => /unknown key "limitz"/.test(n)));
+});
+
+test("a project allowlist cannot widen the global one (glob ? vs *)", () => {
+  const s = sandbox({ global: { payees: { allow: ["a?c"] } }, project: { payees: { allow: ["a*c"] } } });
+  const r = s.run("pre", s.fixture("pre-fakepay-pay-15", { tool_input: { to: "abbbbc" } }));
+  assert.equal(r.decision, "deny");
+  assert.equal(s.run("pre", s.fixture("pre-fakepay-pay-15", { tool_input: { to: "abc" }, tool_use_id: uid() })).json, null);
+});
+
+test("a project cannot remove a currency's caps with null", () => {
+  const s = sandbox({ project: { limits: { USD: null } } });
+  assert.equal(s.run("pre", s.fixture("pre-fakepay-pay-500")).decision, "deny");
+});
+
+test("lower-case currency keys in the policy match upper-case currencies", () => {
+  const s = sandbox({ global: { limits: { eur: { perCall: 1000 } } } });
+  assert.equal(s.run("pre", s.fixture("pre-paypal-create-order")).decision, "deny");
+});
+
+test("a currency named after an Object.prototype member gets no caps of its own", () => {
+  const s = sandbox({ global: { aliases: {} } });
+  const r = s.run("pre", s.fixture("pre-fakepay-pay-500", { tool_input: { currency: "hasOwnProperty" } }));
+  assert.equal(r.decision, "ask");
+  assert.match(r.reason, /no limits are configured for hasOwnProperty/);
+});
+
+test("Stripe zero-decimal currency: 5000 JPY is 5000 yen, not 50", () => {
+  const s = sandbox({ global: { limits: { JPY: { perCall: 1000 } } } });
+  const r = s.run("pre", s.fixture("pre-stripe-create-refund", { tool_input: { amount: 5000, currency: "jpy" } }));
+  assert.equal(r.decision, "deny");
+  assert.match(r.reason, /5000\.00 JPY/);
+});
+
+test("CLI: set null removes a default cap, unset restores it, invalid values are refused", () => {
+  const s = sandbox();
+  assert.equal(s.cli("set", "limits.USD.confirmAbove", "null").status, 0);
+  assert.equal(JSON.parse(s.cli("policy", "--json").stdout).policy.limits.USD.confirmAbove, null);
+  assert.equal(s.cli("set", "limits.USD.confirmAbove", "unset").status, 0);
+  assert.equal(JSON.parse(s.cli("policy", "--json").stdout).policy.limits.USD.confirmAbove, 20);
+  const bad = s.cli("set", "limits.USD.daily", "lots");
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /must be a number or null/);
+  const typo = s.cli("set", "unknownAmount", "Deny");
+  assert.equal(typo.status, 1);
+});
+
+test("NotebookEdit on the policy is guarded too", () => {
+  const s = sandbox();
+  const r = s.run("pre", {
+    session_id: "s",
+    cwd: s.proj,
+    hook_event_name: "PreToolUse",
+    tool_name: "NotebookEdit",
+    tool_input: { notebook_path: path.join(s.proj, ".leash.json") },
+  });
+  assert.equal(r.decision, "ask");
 });

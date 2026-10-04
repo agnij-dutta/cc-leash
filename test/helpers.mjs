@@ -10,31 +10,41 @@ const FIX = path.join(ROOT, "test", "fixtures");
 
 // A fresh sandbox per test: its own global policy, project dir and ledger,
 // so nothing ever touches the real ~/.claude.
+/** @param {{global?: object|string, project?: object|string}} [opts] */
 export function sandbox({ global, project } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "leash-test-"));
   const proj = path.join(dir, "project");
   fs.mkdirSync(proj);
+  const configDir = path.join(dir, ".claude");
+  const leashHome = path.join(configDir, "leash");
+  const globalConfig = path.join(configDir, "leash.json");
+  /** @type {NodeJS.ProcessEnv} */
   const env = {
     ...process.env,
     HOME: dir,
-    CLAUDE_CONFIG_DIR: path.join(dir, ".claude"),
-    LEASH_HOME: path.join(dir, ".claude", "leash"),
-    LEASH_GLOBAL_CONFIG: path.join(dir, ".claude", "leash.json"),
+    CLAUDE_CONFIG_DIR: configDir,
+    LEASH_HOME: leashHome,
+    LEASH_GLOBAL_CONFIG: globalConfig,
     CLAUDE_PROJECT_DIR: proj,
   };
   delete env.LEASH_LEDGER;
-  fs.mkdirSync(env.CLAUDE_CONFIG_DIR, { recursive: true });
-  if (global) fs.writeFileSync(env.LEASH_GLOBAL_CONFIG, typeof global === "string" ? global : JSON.stringify(global));
+  fs.mkdirSync(configDir, { recursive: true });
+  if (global) fs.writeFileSync(globalConfig, typeof global === "string" ? global : JSON.stringify(global));
   if (project) fs.writeFileSync(path.join(proj, ".leash.json"), typeof project === "string" ? project : JSON.stringify(project));
-  const ledgerFile = path.join(env.LEASH_HOME, "ledger.jsonl");
+  const ledgerFile = path.join(leashHome, "ledger.jsonl");
   return {
     dir,
     proj,
     env,
+    globalConfig,
     ledgerFile,
     ledger() {
       try {
-        return fs.readFileSync(ledgerFile, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+        return fs
+          .readFileSync(ledgerFile, "utf8")
+          .split("\n")
+          .filter(Boolean)
+          .map((l) => JSON.parse(l));
       } catch {
         return [];
       }

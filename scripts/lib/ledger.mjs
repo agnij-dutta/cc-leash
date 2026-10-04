@@ -9,25 +9,34 @@
 // own line. File position is a total order every session agrees on, so two
 // parallel $60 payments against a $100 cap cannot both pass: whichever
 // reserve landed second sees the first and denies itself (and appends a
-// "release" for its hold).
+// "release" for its hold). Under contention this can over-deny (a racer's
+// reserve is counted until its release lands) but it never over-allows.
+//
+// Event types: "reserve" (hold an amount), "settle" (the call ran), "release"
+// (denied or failed, drop the hold), "decision" (audit row for allow / ask /
+// deny / dry-run). One hold id per tool call: the tool_use_id.
 
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { claudeHome } from "./policy.mjs";
 
+/** Directory for leash data (LEASH_HOME, else ~/.claude/leash). */
 export function leashHome() {
   return process.env.LEASH_HOME || path.join(claudeHome(), "leash");
 }
 
+/** The ledger file (LEASH_LEDGER, else <leashHome>/ledger.jsonl). */
 export function ledgerPath() {
   return process.env.LEASH_LEDGER || path.join(leashHome(), "ledger.jsonl");
 }
 
+/** Random 16-hex-char id for holds and reserve nonces. */
 export function newId() {
   return crypto.randomBytes(8).toString("hex");
 }
 
+/** Append one event as one line (one write). Throws if the ledger can't be written. */
 export function append(entry) {
   const file = ledgerPath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -36,6 +45,7 @@ export function append(entry) {
   return entry;
 }
 
+/** Every parseable event in file order. A missing ledger is empty; other read errors throw. */
 export function readAll() {
   let txt;
   try {
@@ -57,10 +67,12 @@ export function readAll() {
   return out;
 }
 
+// Sums are done in integer micro-units so 0.1 + 0.2 never lands a hair over a cap.
 const MICRO = 1e6;
 export const toMicro = (n) => Math.round(Number(n) * MICRO);
 export const fromMicro = (m) => m / MICRO;
 
+/** "YYYY-MM-DD" in the machine's local time zone; daily caps reset at local midnight. */
 export function localDay(d = new Date()) {
   const x = new Date(d);
   const y = x.getFullYear();
@@ -69,11 +81,18 @@ export function localDay(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
-// Fold events into one state per hold/call. Key = holdId (one per tool call).
+/**
+ * Fold events into one state per hold (tool call): reserved, settled,
+ * released or expired. A reserve older than `ttlMs` that never settled is
+ * expired and no longer counts.
+ * @param {object[]} entries ledger events
+ * @param {{now?: number, ttlMs?: number}} [opts]
+ * @returns {Map<string, any>}
+ */
 export function fold(entries, { now = Date.now(), ttlMs = 15 * 60_000 } = {}) {
   const holds = new Map();
   for (const e of entries) {
-    const key = e.hold || e.id;
+    const key = e.hold;
     if (!key) continue;
     if (e.event === "reserve") {
       if (!holds.has(key)) holds.set(key, { ...e, status: "reserved" });
@@ -91,7 +110,11 @@ export function fold(entries, { now = Date.now(), ttlMs = 15 * 60_000 } = {}) {
   return holds;
 }
 
-// Spend (settled + live holds) per currency, today and for a session.
+/**
+ * Spend (settled + live holds) in one currency, today and for one session.
+ * @param {object[]} entries ledger events
+ * @param {{session?: string|null, currency?: string|null, now?: number, ttlMs?: number}} [opts]
+ */
 export function totals(entries, { session, currency, now = Date.now(), ttlMs } = {}) {
   const holds = fold(entries, { now, ttlMs });
   const today = localDay(new Date(now));
@@ -111,7 +134,11 @@ export function totals(entries, { session, currency, now = Date.now(), ttlMs } =
   return { day: fromMicro(out.day), session: fromMicro(out.session), pending: fromMicro(out.pending), unpriced: out.unpriced };
 }
 
-// Per-currency rollup for status output.
+/**
+ * Per-currency totals for today, for `leash status`.
+ * @param {object[]} entries ledger events
+ * @param {{now?: number, ttlMs?: number}} [opts]
+ */
 export function rollup(entries, { now = Date.now(), ttlMs } = {}) {
   const holds = fold(entries, { now, ttlMs });
   const today = localDay(new Date(now));
@@ -123,8 +150,8 @@ export function rollup(entries, { now = Date.now(), ttlMs } = {}) {
       if (h.status === "settled" && localDay(new Date(h.ts)) === today) unpriced++;
       continue;
     }
-    const c = (byCur[h.currency || "?"] ||= { day: 0, pending: 0, calls: 0, sessions: {} });
     if (localDay(new Date(h.ts)) !== today) continue;
+    const c = (byCur[h.currency || "?"] ||= { day: 0, pending: 0, calls: 0, sessions: {} });
     c.day += toMicro(h.amount);
     c.calls++;
     if (h.status === "reserved") c.pending += toMicro(h.amount);

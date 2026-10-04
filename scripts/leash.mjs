@@ -19,9 +19,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { handlePre, handlePost, fmt, shortTool } from "./lib/engine.mjs";
-import { loadPolicy, globalPolicyPath, projectPolicyPath, limitsFor } from "./lib/policy.mjs";
+import { loadPolicy, globalPolicyPath, projectPolicyPath, limitsFor, resolveCurrency, validatePolicy } from "./lib/policy.mjs";
 import { compileRules, matchRule, extract } from "./lib/rules.mjs";
-import { resolveCurrency } from "./lib/policy.mjs";
 import * as ledger from "./lib/ledger.mjs";
 
 const [, , cmd, ...rest] = process.argv;
@@ -40,10 +39,11 @@ function emit(obj) {
   if (obj) process.stdout.write(JSON.stringify(obj) + "\n");
 }
 
+// A crashing hook exits non-zero, which Claude Code treats as a non-blocking
+// error: the payment would go through. So on any internal error in PreToolUse
+// we escalate to the user instead. (hooks/hooks.json adds a shell fallback
+// for the case where node itself cannot start.)
 function failClosed(err, input) {
-  // A crashing hook exits non-zero, which Claude Code treats as a non-blocking
-  // error: the payment would go through. So on any internal error we escalate
-  // to the user instead.
   const tool = input?.tool_name || "";
   if (tool && !tool.startsWith("mcp__")) return; // guard path: never wedge Bash/Edit
   emit({
@@ -68,8 +68,14 @@ function runHook(kind) {
     if (kind === "pre") emit(handlePre(input));
     else emit(handlePost(input, { failed: kind === "post-failure" }));
   } catch (e) {
-    if (kind === "pre") failClosed(e, input);
-    else process.stderr.write(`leash: ${e.stack || e}\n`);
+    if (kind === "pre") {
+      failClosed(e, input);
+    } else {
+      // The call already ran; we can't block it. Exit non-zero so the user
+      // sees a hook error: an unsettled hold only counts until it expires.
+      process.stderr.write(`leash: could not record this call in the ledger: ${e.stack || e}\n`);
+      process.exitCode = 1;
+    }
   }
 }
 
@@ -92,10 +98,18 @@ function decisionRows(entries, n) {
 
 function rowText(e) {
   const label =
-    e.event === "settle" ? "PAID" : e.event === "release" ? "FAILED" : e.decision === "dry-run" ? `DRY:${String(e.would).toUpperCase()}` : String(e.decision).toUpperCase();
+    e.event === "settle"
+      ? "PAID"
+      : e.event === "release"
+        ? "FAILED"
+        : e.decision === "dry-run"
+          ? `DRY:${String(e.would).toUpperCase()}`
+          : String(e.decision).toUpperCase();
   const amt = fmt(e.amount, e.currency);
   const why = e.event === "decision" && e.decision !== "allow" ? `  ${e.reason || ""}` : "";
-  return `  ${hhmm(e.ts)}  ${label.padEnd(9)} ${amt.padStart(12)}  -> ${String(e.payee || "?").slice(0, 24).padEnd(24)} ${shortTool(e.tool)}${why}`;
+  return `  ${hhmm(e.ts)}  ${label.padEnd(9)} ${amt.padStart(12)}  -> ${String(e.payee || "?")
+    .slice(0, 24)
+    .padEnd(24)} ${shortTool(e.tool)}${why}`;
 }
 
 function status() {
@@ -137,7 +151,10 @@ function status() {
   }
   if (unpriced) out.push(`  ${unpriced} approved call(s) today with an unknown amount (not counted against caps)`);
   out.push("");
-  out.push(`Payees: allow ${policy.payees.allow.length ? policy.payees.allow.join(", ") : "(any)"}; deny ${policy.payees.deny.length ? policy.payees.deny.join(", ") : "(none)"}`);
+  const projectAllow = policy.payees.projectAllow?.length ? ` and (project) ${policy.payees.projectAllow.join(", ")}` : "";
+  out.push(
+    `Payees: allow ${policy.payees.allow.length ? policy.payees.allow.join(", ") : "(any)"}${projectAllow}; deny ${policy.payees.deny.length ? policy.payees.deny.join(", ") : "(none)"}`,
+  );
   out.push(`Unknown amount -> ${policy.unknownAmount} · unknown currency -> ${policy.unknownCurrency} · unlisted currency -> ${policy.unlistedCurrency}`);
   out.push("");
   const recent = decisionRows(entries, 10);
@@ -173,6 +190,7 @@ function showPolicy() {
 
 // --------------------------------------------------------------- edits
 
+// CLI values are JSON when they parse as JSON (500, true, null, ["a"]), else strings.
 function parseValue(v) {
   if (v === undefined) throw new Error("missing value");
   try {
@@ -191,6 +209,9 @@ function editFile(mutator) {
     if (e.code !== "ENOENT") throw new Error(`${file} is not valid JSON; fix it by hand first (${e.message})`);
   }
   mutator(obj);
+  // Refuse to write a policy the hook would then treat as broken.
+  const { errors } = validatePolicy(obj);
+  if (errors.length) throw new Error(`not saved, the result would be invalid:\n  ${errors.join("\n  ")}`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n");
@@ -201,25 +222,26 @@ function editFile(mutator) {
   }
 }
 
-function walk(obj, key, create = true) {
+// Resolve "limits.USD.daily" to [parentObject, "daily"], creating objects on the way.
+function walk(obj, key) {
   const parts = key.split(".");
+  if (parts.some((p) => !p || p === "__proto__" || p === "constructor" || p === "prototype")) throw new Error(`invalid key "${key}"`);
   let cur = obj;
   for (const p of parts.slice(0, -1)) {
-    if (typeof cur[p] !== "object" || cur[p] === null) {
-      if (!create) return [null, null];
-      cur[p] = {};
-    }
+    if (typeof cur[p] !== "object" || cur[p] === null || Array.isArray(cur[p])) cur[p] = {};
     cur = cur[p];
   }
   return [cur, parts.at(-1)];
 }
 
+// `set key null` stores null, which removes that cap (it overrides the
+// default). `set key unset` deletes the key, so the default applies again.
 function setCmd() {
   const [key, value] = args;
-  if (!key) throw new Error("usage: set <dotted.key> <value> [--project]");
+  if (!key || value === undefined) throw new Error("usage: set <dotted.key> <value|null|unset> [--project]");
   editFile((obj) => {
     const [parent, leaf] = walk(obj, key);
-    if (value === "null" || value === "unset") delete parent[leaf];
+    if (value === "unset") delete parent[leaf];
     else parent[leaf] = parseValue(value);
   });
 }
@@ -231,7 +253,8 @@ function listCmd(op) {
     const [parent, leaf] = walk(obj, key);
     const list = Array.isArray(parent[leaf]) ? parent[leaf] : [];
     const v = parseValue(value);
-    parent[leaf] = op === "add" ? [...list.filter((x) => JSON.stringify(x) !== JSON.stringify(v)), v] : list.filter((x) => JSON.stringify(x) !== JSON.stringify(v));
+    parent[leaf] =
+      op === "add" ? [...list.filter((x) => JSON.stringify(x) !== JSON.stringify(v)), v] : list.filter((x) => JSON.stringify(x) !== JSON.stringify(v));
   });
 }
 
@@ -239,13 +262,20 @@ function listCmd(op) {
 function check() {
   const [tool, json] = args;
   if (!tool) throw new Error("usage: check <tool_name> '<tool_input json>'");
-  const input = json ? JSON.parse(json) : {};
+  let input = {};
+  try {
+    if (json) input = JSON.parse(json);
+  } catch (e) {
+    throw new Error(`tool input must be JSON, e.g. '{"amount": 5, "to": "acme"}' (${e.message})`);
+  }
   const loaded = loadPolicy(process.cwd());
   const rule = matchRule(compileRules(loaded.rules), tool, loaded.policy.ignore);
   if (!rule) return console.log(`${tool}: not a payment tool (no rule matched); leash does nothing.`);
   const ex = extract(rule, input);
   const cur = resolveCurrency(loaded.policy, ex.currency);
-  console.log(JSON.stringify({ tool, rule: rule.id, amount: ex.amount, currency: cur, rawCurrency: ex.currency, payee: ex.payee, amountPath: ex.amountPath }, null, 2));
+  console.log(
+    JSON.stringify({ tool, rule: rule.id, amount: ex.amount, currency: cur, rawCurrency: ex.currency, payee: ex.payee, amountPath: ex.amountPath }, null, 2),
+  );
 }
 
 const HELP = `cc-leash: spending limits for Claude Code
@@ -253,6 +283,7 @@ const HELP = `cc-leash: spending limits for Claude Code
   ledger [N] [--json]             last N ledger rows
   policy [--json]                 effective merged policy
   set <key> <value> [--project]   e.g. set limits.USD.daily 500
+                                  value null removes a cap, unset restores the default
   add|remove <key> <value>        e.g. add payees.deny "*@scam.example"
   check <tool> '<json>'           show what leash extracts (no side effects)
 hook entry points: pre | post | post-failure (stdin JSON)`;

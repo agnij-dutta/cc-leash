@@ -9,6 +9,7 @@
 import fs from "node:fs";
 import readline from "node:readline";
 
+/** @type {{balance: number, payments: {id: string, to: string, amount: number, currency: string, memo: string, ts: string}[]}} */
 const state = { balance: 10_000, payments: [] };
 const LOG = process.env.FAKEPAY_LOG;
 
@@ -63,7 +64,14 @@ function callTool(name, a = {}) {
       const amount = Number(a.amount);
       if (!(amount > 0)) return text(`invalid amount: ${a.amount}`, true);
       if (amount > state.balance) return text(`insufficient funds: balance $${state.balance.toFixed(2)}`, true);
-      const p = { id: `pay_${(state.payments.length + 1).toString().padStart(4, "0")}`, to: a.to, amount, currency: a.currency || "USD", memo: a.memo || "", ts: new Date().toISOString() };
+      const p = {
+        id: `pay_${(state.payments.length + 1).toString().padStart(4, "0")}`,
+        to: a.to,
+        amount,
+        currency: a.currency || "USD",
+        memo: a.memo || "",
+        ts: new Date().toISOString(),
+      };
       state.balance -= amount;
       state.payments.push(p);
       if (LOG) fs.appendFileSync(LOG, JSON.stringify(p) + "\n");

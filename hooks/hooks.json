@@ -7,13 +7,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/leash.mjs\" pre",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/leash.mjs\" pre || echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"leash could not run (is Node.js 18+ on PATH?), so it cannot check this call against your spending limits. Approve only if you expected it.\"}}'",
             "timeout": 15
           }
         ]
       },
       {
-        "matcher": "Bash|Edit|Write|MultiEdit",
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",

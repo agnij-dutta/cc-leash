@@ -13,7 +13,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-WORK="${LEASH_DEMO_DIR:-$(mktemp -d -t leash-demo)}"
+# mktemp with an explicit template works on both macOS and GNU coreutils.
+WORK="${LEASH_DEMO_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/leash-demo.XXXXXX")}"
 mkdir -p "$WORK"
 
 export LEASH_HOME="$WORK/leash"

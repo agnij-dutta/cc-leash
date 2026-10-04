@@ -30,6 +30,8 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/leash.mjs" remove payees.allow acme
 node "${CLAUDE_PLUGIN_ROOT}/scripts/leash.mjs" set dryRun true
 ```
 
+To remove a cap, set it to `null` (for example `set limits.USD.confirmAbove null`). To go back to the built-in default, use `unset` (for example `set limits.USD.confirmAbove unset`). The CLI refuses to save a value leash would reject, and prints why.
+
 Edits go to the global policy (`~/.claude/leash.json`) by default. Add `--project` to write the project's `.leash.json` instead; a project policy can only tighten the global one unless the global policy sets `projectCanLoosen: true`.
 
 leash asks the user to confirm any command that changes its own policy. That is expected: never try to work around it, and never raise a limit the user did not explicitly ask to raise. Finish by running `node "${CLAUDE_PLUGIN_ROOT}/scripts/leash.mjs" status` and showing the result.
