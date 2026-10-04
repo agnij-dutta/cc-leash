@@ -70,11 +70,11 @@ Requires Node.js 18 or newer on your PATH. Zero npm dependencies.
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `/leash:status` | Spend today against each cap, pending holds, recent allow / deny / ask decisions |
-| `/leash:ledger [N]` | The last N ledger rows |
-| `/leash:set [change]` | Guided policy edit, e.g. `/leash:set daily USD cap to 500` |
+| Command               | What it does                                                                     |
+| --------------------- | -------------------------------------------------------------------------------- |
+| `/leash:status`       | Spend today against each cap, pending holds, recent allow / deny / ask decisions |
+| `/leash:ledger [N]`   | The last N ledger rows                                                           |
+| `/leash:set [change]` | Guided policy edit, e.g. `/leash:set daily USD cap to 500`                       |
 
 The same things work from a terminal: `node scripts/leash.mjs status | ledger | policy | set | add | remove | check`.
 
@@ -101,25 +101,25 @@ Two files, merged over built-in defaults:
 }
 ```
 
-| Key | Default | Meaning |
-|---|---|---|
-| `limits.<CUR>.perCall` | USD 50 | Deny any single call above this |
-| `limits.<CUR>.perSession` | USD 100 | Deny once one Claude Code session would go over this |
-| `limits.<CUR>.daily` | USD 200 | Deny once all sessions today would go over this (local day) |
-| `limits.<CUR>.confirmAbove` | USD 20 | Ask you before any call above this |
-| `limits["*"]` | unset | Caps for any currency not listed |
-| `aliases` | USDC, USDT, PYUSD, DAI, USDS to USD | Count one currency against another's caps |
-| `payees.allow` / `payees.deny` | empty | Case-insensitive globs. A non-empty allowlist denies everyone else |
-| `unknownAmount` | `ask` | When the amount can't be read: `ask`, `deny` or `allow` |
-| `unknownCurrency` | `ask` | When the currency can't be read |
-| `unlistedCurrency` | `ask` | When the currency has no caps configured |
-| `dryRun` | `false` | Log what would happen, block nothing |
-| `autoApprove` | `false` | `true` = in-policy calls skip the normal permission prompt. `false` = leash only blocks; you still approve tools as usual |
-| `reservationTtlMinutes` | 15 | How long an approved call holds its amount if it never completes |
-| `guardConfig` | `true` | Ask before Claude edits the policy or ledger, or runs `leash set` |
-| `projectCanLoosen` | `false` | Let a project `.leash.json` raise limits (global only) |
-| `rules` | `[]` | Extra extractor rules for your own payment tools (see below) |
-| `ignore` | `[]` | Tool-name regexes that are never treated as payments |
+| Key                            | Default                             | Meaning                                                                                                                   |
+| ------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `limits.<CUR>.perCall`         | USD 50                              | Deny any single call above this                                                                                           |
+| `limits.<CUR>.perSession`      | USD 100                             | Deny once one Claude Code session would go over this                                                                      |
+| `limits.<CUR>.daily`           | USD 200                             | Deny once all sessions today would go over this (local day)                                                               |
+| `limits.<CUR>.confirmAbove`    | USD 20                              | Ask you before any call above this                                                                                        |
+| `limits["*"]`                  | unset                               | Caps for any currency not listed                                                                                          |
+| `aliases`                      | USDC, USDT, PYUSD, DAI, USDS to USD | Count one currency against another's caps                                                                                 |
+| `payees.allow` / `payees.deny` | empty                               | Case-insensitive globs. A non-empty allowlist denies everyone else                                                        |
+| `unknownAmount`                | `ask`                               | When the amount can't be read: `ask`, `deny` or `allow`                                                                   |
+| `unknownCurrency`              | `ask`                               | When the currency can't be read                                                                                           |
+| `unlistedCurrency`             | `ask`                               | When the currency has no caps configured                                                                                  |
+| `dryRun`                       | `false`                             | Log what would happen, block nothing                                                                                      |
+| `autoApprove`                  | `false`                             | `true` = in-policy calls skip the normal permission prompt. `false` = leash only blocks; you still approve tools as usual |
+| `reservationTtlMinutes`        | 15                                  | How long an approved call holds its amount if it never completes                                                          |
+| `guardConfig`                  | `true`                              | Ask before Claude edits the policy or ledger, or runs `leash set`                                                         |
+| `projectCanLoosen`             | `false`                             | Let a project `.leash.json` raise limits (global only)                                                                    |
+| `rules`                        | `[]`                                | Extra extractor rules for your own payment tools (see below)                                                              |
+| `ignore`                       | `[]`                                | Tool-name regexes that are never treated as payments                                                                      |
 
 Amounts are in major units (dollars, not cents). Set a cap to `null` to remove it.
 
@@ -131,15 +131,15 @@ A `.leash.json` comes with whatever repo you cloned, and a repo is not necessari
 
 Rules are tried in order; the first match wins. Your own `rules` come first.
 
-| Rule | Tools | Notes |
-|---|---|---|
-| `capline` | `mcp__*capline*__pay` | Currency USDC |
-| `fakepay` | the demo server | |
-| `stripe` | `create_refund`, `create_payment_intent`, `create_payout`, `create_transfer`, `create_payment_link`, `finalize_invoice`, `create_invoice_item`, ... | Amounts in cents, divided by 100. Payment links carry a price id, not an amount, so they ask |
-| `paypal` | `create_order`, `capture_order`, `create_refund`, `create_payout`, `send_invoice`, ... | Reads `purchase_units[0].amount.value` and friends |
-| `wallet` | AgentKit, CDP, and other wallet servers: `transfer`, `send`, `trade`, `swap`, `withdraw`, `bridge` | Currency from `assetId` / `token` |
-| `x402` | `x402`, `pay_for`, `fetch_with_payment`, `make_payment` | |
-| `generic` | any MCP tool with `pay`, `payment`, `transfer`, `payout`, `refund`, `charge`, `withdraw`, `purchase`, `checkout`, ... in its name | Read-only names (`get_`, `list_`, `*_status`, `*_balance`, ...) are excluded |
+| Rule      | Tools                                                                                                                                               | Notes                                                                                        |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `capline` | `mcp__*capline*__pay`                                                                                                                               | Currency USDC                                                                                |
+| `fakepay` | the demo server                                                                                                                                     |                                                                                              |
+| `stripe`  | `create_refund`, `create_payment_intent`, `create_payout`, `create_transfer`, `create_payment_link`, `finalize_invoice`, `create_invoice_item`, ... | Amounts in cents, divided by 100. Payment links carry a price id, not an amount, so they ask |
+| `paypal`  | `create_order`, `capture_order`, `create_refund`, `create_payout`, `send_invoice`, ...                                                              | Reads `purchase_units[0].amount.value` and friends                                           |
+| `wallet`  | AgentKit, CDP, and other wallet servers: `transfer`, `send`, `trade`, `swap`, `withdraw`, `bridge`                                                  | Currency from `assetId` / `token`                                                            |
+| `x402`    | `x402`, `pay_for`, `fetch_with_payment`, `make_payment`                                                                                             |                                                                                              |
+| `generic` | any MCP tool with `pay`, `payment`, `transfer`, `payout`, `refund`, `charge`, `withdraw`, `purchase`, `checkout`, ... in its name                   | Read-only names (`get_`, `list_`, `*_status`, `*_balance`, ...) are excluded                 |
 
 Check what leash would extract from a call, without side effects:
 
