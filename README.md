@@ -38,7 +38,7 @@ Requires Node.js 18+ and [Claude Code](https://code.claude.com/docs) (logged in)
 
 ```bash
 git clone https://github.com/agnij-dutta/cc-leash && cd cc-leash
-npm test                    # 49 tests, no install needed
+npm test                    # 50 tests, no install needed
 bash examples/demo/demo.sh  # interactive Claude Code session with leash + fakepay
 ```
 

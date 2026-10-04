@@ -213,6 +213,13 @@ test("dry-run: logs what would happen and blocks nothing", () => {
   assert.equal(e.would, "deny");
 });
 
+test("dry-run predicts a budget deny even when a static check would only ask", () => {
+  const s = sandbox({ global: { dryRun: true, limits: { USD: { perCall: 50, daily: 30, confirmAbove: 20 } } } });
+  const r = s.run("pre", s.fixture("pre-fakepay-pay-15", { tool_input: { amount: 40 } }));
+  assert.equal(r.decision, null);
+  assert.match(r.json.systemMessage, /would deny/);
+});
+
 test("a project .leash.json cannot loosen the global policy", () => {
   const s = sandbox({
     global: { limits: { USD: { perCall: 50, perSession: 100, daily: 200 } } },

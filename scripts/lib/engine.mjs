@@ -99,7 +99,8 @@ export function handlePre(input, { now = Date.now() } = {}) {
 
   // ---- dry run: evaluate everything, enforce nothing
   if (policy.dryRun) {
-    if (!verdict) verdict = budgetVerdict(policy, base, currency, ledger.readAll(), now);
+    // Same strictest-wins rule as enforcing mode, so dry-run predicts it exactly.
+    verdict = strictest([verdict, budgetVerdict(policy, base, currency, ledger.readAll(), now)]);
     const would = verdict ? verdict.decision : "allow";
     const reason = verdict ? verdict.reason : "within limits";
     ledger.append({ ...base, event: "decision", hold, decision: "dry-run", would, reason });
@@ -154,7 +155,7 @@ export function handlePre(input, { now = Date.now() } = {}) {
     code: verdict?.code,
     reason: verdict ? `allowed by policy: ${verdict.reason}` : "within limits",
   });
-  if (policy.autoApprove) return pre("allow", `leash: ${what} is within limits.`);
+  if (policy.autoApprove) return pre("allow", verdict ? `leash: ${what} is allowed by policy (${verdict.reason}).` : `leash: ${what} is within limits.`);
   return null;
 }
 
