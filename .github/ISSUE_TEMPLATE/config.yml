@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/agnij-dutta/cc-leash/security/advisories/new
+    about: Ways to get past a spending limit. Please report privately.
