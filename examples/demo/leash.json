@@ -1,0 +1,7 @@
+{
+  "limits": {
+    "USD": { "perCall": 100, "perSession": 250, "daily": 500, "confirmAbove": 75 }
+  },
+  "payees": { "deny": ["*.ru", "*@protonmail.com"] },
+  "autoApprove": true
+}

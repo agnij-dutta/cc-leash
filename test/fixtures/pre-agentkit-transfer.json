@@ -1,0 +1,10 @@
+{
+  "session_id": "2b3c4d5e-6f70-4812-93a4-b5c6d7e8f901",
+  "transcript_path": "/Users/demo/.claude/projects/-tmp-onchain/2b3c4d5e-6f70-4812-93a4-b5c6d7e8f901.jsonl",
+  "cwd": "__CWD__",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "mcp__agentkit__WalletActionProvider_native_transfer",
+  "tool_input": { "to": "0x4bEf0221d6F7Dd0C969fe46a4e9b339a84F52FDF", "value": "0.25", "assetId": "eth" },
+  "tool_use_id": "toolu_01H8xTransfer"
+}

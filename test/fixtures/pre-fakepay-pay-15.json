@@ -1,0 +1,10 @@
+{
+  "session_id": "8f2c1a3e-5b7d-4e2a-9c11-0d6f3e2b7a10",
+  "transcript_path": "/Users/demo/.claude/projects/-tmp-demo/8f2c1a3e-5b7d-4e2a-9c11-0d6f3e2b7a10.jsonl",
+  "cwd": "__CWD__",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "mcp__fakepay__pay",
+  "tool_input": { "to": "acme-supplies", "amount": 15, "currency": "USD", "memo": "domain renewal" },
+  "tool_use_id": "toolu_01B7xPay15"
+}

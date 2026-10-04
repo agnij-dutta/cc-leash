@@ -1,0 +1,14 @@
+{
+  "name": "leash",
+  "displayName": "cc-leash",
+  "version": "0.1.0",
+  "description": "Spending limits for Claude Code. Intercepts MCP tool calls that move money (Stripe, PayPal, x402, wallets, capline-mcp) and enforces per-call, per-session and daily caps, payee allow/deny lists and a confirmation threshold before they run.",
+  "author": {
+    "name": "Agnij Dutta",
+    "url": "https://x.com/0xholmesdev"
+  },
+  "homepage": "https://github.com/agnij-dutta/cc-leash",
+  "repository": "https://github.com/agnij-dutta/cc-leash",
+  "license": "MIT",
+  "keywords": ["spending-limits", "payments", "mcp", "hooks", "agent-safety", "x402", "stripe"]
+}

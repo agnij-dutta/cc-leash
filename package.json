@@ -1,0 +1,14 @@
+{
+  "name": "cc-leash",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spending limits for Claude Code: a plugin that enforces caps on MCP tool calls that move money.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "validate": "claude plugin validate . && claude plugin validate .claude-plugin/plugin.json",
+    "demo": "bash examples/demo/demo.sh"
+  }
+}

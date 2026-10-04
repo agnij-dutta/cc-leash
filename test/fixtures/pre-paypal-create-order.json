@@ -1,0 +1,10 @@
+{
+  "session_id": "5c4b3a29-1807-4f6e-a5d4-c3b2a1908f7e",
+  "transcript_path": "/Users/demo/.claude/projects/-tmp-store/5c4b3a29-1807-4f6e-a5d4-c3b2a1908f7e.jsonl",
+  "cwd": "__CWD__",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "mcp__paypal__create_order",
+  "tool_input": { "intent": "CAPTURE", "purchase_units": [{ "amount": { "currency_code": "EUR", "value": "1,250.00" }, "payee": { "email_address": "shop@example.com" } }] },
+  "tool_use_id": "toolu_01G7xPaypal"
+}

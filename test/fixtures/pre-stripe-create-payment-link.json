@@ -1,0 +1,10 @@
+{
+  "session_id": "1d0e7c55-2a6b-4f8e-b3a9-6a2f4c8d9e01",
+  "transcript_path": "/Users/demo/.claude/projects/-tmp-shop/1d0e7c55-2a6b-4f8e-b3a9-6a2f4c8d9e01.jsonl",
+  "cwd": "__CWD__",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "mcp__stripe__create_payment_link",
+  "tool_input": { "price": "price_1PqXyZ2eZvKYlo2Cabc", "quantity": 3 },
+  "tool_use_id": "toolu_01E5xLink"
+}

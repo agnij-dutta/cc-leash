@@ -1,0 +1,17 @@
+{
+  "name": "cc-leash",
+  "description": "cc-leash: spending limits for Claude Code",
+  "owner": {
+    "name": "Agnij Dutta",
+    "url": "https://github.com/agnij-dutta"
+  },
+  "plugins": [
+    {
+      "name": "leash",
+      "source": "./",
+      "description": "Put a spending limit on Claude Code: caps, payee lists and a JSONL ledger for every MCP tool call that moves money.",
+      "category": "security",
+      "tags": ["payments", "spending-limits", "mcp", "hooks"]
+    }
+  ]
+}
